@@ -1,0 +1,54 @@
+# Libraries----
+
+library(terra)
+library(raster)
+library(sf)
+library(RStoolbox)
+library(purrr)
+library(dplyr)
+
+# Import NDVI imagery
+
+list <- list.files(path = "/home/alessio/Synthesis/NDVI", pattern = "ndvi") %>%
+  map(~rast(.))
+
+# Import meadows vectors
+
+meadows <- st_read("/home/alessio/Synthesis/selected_meadows")
+
+# Adjust crs
+
+meadows <- st_transform(meadows, crs = st_crs(list[[1]]))
+
+# Values extraction----
+
+list_ndvi <- list()
+for (i in seq_along(list)) {
+  x <- terra::extract(list[[i]], meadows, df = TRUE)
+  x$ID <- meadows$TARGET_FID[x$ID]
+  list_ndvi <- c(list_ndvi, x)
+}
+
+# Statistics calculation
+
+mean_values <- aggregate(list_ndvi[[86]], by = list(list_ndvi[[31]]), FUN = mean)
+median_values <- aggregate(list_ndvi[[86]], by = list(list_ndvi[[31]]), FUN = median)
+stdv_values <- aggregate(list_ndvi[[86]], by = list(list_ndvi[[31]]), FUN = sd)
+whole43 <- data.frame(TARGET_FID = mean_values$Group.1, 
+                     MEAN_NDVI = mean_values$x, 
+                     MEDIAN_NDVI = median_values$x, 
+                     STD_NDVI = stdv_values$x, 
+                     DATE = "2024_05_14")
+
+
+# # Merge into single df
+
+df <- rbind(whole1, whole2, whole3, whole4, whole5, whole6, whole7, whole8, whole9, whole10,
+            whole11, whole12, whole13, whole14, whole15, whole16, whole17, whole18, whole19, whole20,
+            whole21, whole22, whole23, whole24, whole25, whole26, whole27, whole28, whole29, whole30,
+            whole31, whole32, whole33, whole34, whole35, whole36, whole37, whole38, whole39, whole40,
+            whole41, whole42, whole43)
+
+# Export as CSV
+
+write.csv(df, "NDVI.csv", row.names = TRUE)
