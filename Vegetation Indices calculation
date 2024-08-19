@@ -1,0 +1,55 @@
+# Packages ----
+library(terra)
+library(raster)
+library(sf)
+library(RStoolbox)
+
+# Functions----
+
+# Created a VI function (vegetation index)
+VI <- function(img, k, i) {
+  bk <- img[[k]]
+  bi <- img[[i]]
+  vi <- (bk - bi) / (bk + bi)
+  return(vi)
+}
+
+# Set working directory ----
+setwd("/home/alessio/Synthesis/2024_05_14")
+
+# Import imagery and make simple plot
+stack <- stack("composite.tif")
+
+# Reflectance calibration
+stack <- stack/10000
+
+# Calculate the NDVI
+ndvi_clbtd <- VI(stack, 4, 3)   # 5 and 3 refer to the bands NIR and RED respectively
+
+plot(ndvi)
+
+# Convert to raster
+writeRaster(x = ndvi_clbtd,
+            filename="ndvi_clbtd_2024_05_14.tif", 	      # where your file will go - update with your file path!
+            format = "GTiff", 					# save as a tif
+            datatype = 'FLT4S',
+            overwrite = T) 					# save as a INTEGER rather than a float
+
+# Calculate the EVI2
+evi2 <- spectralIndices(stack,
+                            blue = 1,
+                            green = 2,
+                            red = 3,
+                            nir = 4,
+                            scaleFactor = 1,
+                            skipRefCheck = F,
+                            indices = "EVI2")
+
+evi2 <- raster(evi2)
+
+# Convert to raster
+writeRaster(x = evi2,
+            filename = "evi2_2024_05_14.tif",
+            format = "GTiff",
+            datatype = 'FLT4S',
+            overwrite = T)
