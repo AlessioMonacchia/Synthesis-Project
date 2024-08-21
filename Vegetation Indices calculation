@@ -1,55 +1,36 @@
-# Packages ----
+# Packages
+
 library(terra)
 library(raster)
 library(sf)
 library(RStoolbox)
+library(purrr)
 
-# Functions----
+# Import composites ----
 
-# Created a VI function (vegetation index)
-VI <- function(img, k, i) {
-  bk <- img[[k]]
-  bi <- img[[i]]
-  vi <- (bk - bi) / (bk + bi)
-  return(vi)
-}
-
-# Set working directory ----
-setwd("/home/alessio/Synthesis/2024_05_14")
-
-# Import imagery and make simple plot
-stack <- stack("composite.tif")
-
-# Reflectance calibration
-stack <- stack/10000
-
+list <- list.files(path = "/home/alessio/Synthesis/composites", pattern = "20", full.names = TRUE, recursive = TRUE) %>%
+  map(~stack(.)/10000) # apply radiometric calibration
+  
 # Calculate the NDVI
-ndvi_clbtd <- VI(stack, 4, 3)   # 5 and 3 refer to the bands NIR and RED respectively
 
-plot(ndvi)
+ndvi <- map_at(list, c(1:15), spectralIndices,  # for RapidEye imagery
+                         blue = 1,
+                         green = 2,
+                         red = 3,
+                         redEdge1 = 4,
+                         nir = 5,
+                         indices = "NDVI") 
 
-# Convert to raster
-writeRaster(x = ndvi_clbtd,
-            filename="ndvi_clbtd_2024_05_14.tif", 	      # where your file will go - update with your file path!
-            format = "GTiff", 					# save as a tif
-            datatype = 'FLT4S',
-            overwrite = T) 					# save as a INTEGER rather than a float
-
-# Calculate the EVI2
-evi2 <- spectralIndices(stack,
-                            blue = 1,
-                            green = 2,
-                            red = 3,
-                            nir = 4,
-                            scaleFactor = 1,
-                            skipRefCheck = F,
-                            indices = "EVI2")
-
-evi2 <- raster(evi2)
+ndvi <- map_at(ndvi, c(16:43), spectralIndices, # for PS2 imagery
+               blue = 1,
+               green = 2,
+               red = 3,
+               nir = 4,
+               indices = "NDVI")
 
 # Convert to raster
-writeRaster(x = evi2,
-            filename = "evi2_2024_05_14.tif",
+writeRaster(x = ndvi[[1]],
+            filename = "kndvi_2011_05_26.tif",
             format = "GTiff",
             datatype = 'FLT4S',
             overwrite = T)
