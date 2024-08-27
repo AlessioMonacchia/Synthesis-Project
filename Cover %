@@ -1,0 +1,95 @@
+# Libraries ----
+library(terra)
+library(raster)
+library(sf)
+library(RStoolbox)
+library(purrr)
+library(dplyr)
+
+# CALCULATE THE % COVER OVER THE NP AREA ----
+
+# Import NDVI imagery
+list <- list.files(path = "/home/alessio/Synthesis/NDVI", pattern = "ndvi", full.names = TRUE) %>%
+  map(~rast(.))
+
+# Function to count non-NA pixels
+count_non_na <- function(r) {
+  sum(!is.na(values(r)))  # Count the number of non-NA pixels
+}
+
+# Apply the function to each raster in the list
+non_na_counts <- lapply(list, count_non_na)
+
+# Convert the list of counts to a more readable format, like a vector or a data frame
+non_na_counts <- unlist(non_na_counts)
+
+# Calculate the cover %
+maxre <- 25333176
+maxps <- 70356001
+
+calculate_re <- function(c){
+  1 -(maxre - c) / maxre
+}
+
+calculate_ps <- function(c){
+  1 -(maxps - c) / maxps
+}
+
+cover1 <- lapply(non_na_counts, calculate_re)
+cover1 <- unlist(cover1[1:15])
+
+cover2 <- lapply(non_na_counts, calculate_ps)
+cover2 <- unlist(cover2[16:43])
+
+cover_percentage <- c(cover1, cover2)
+
+summary(cover_percentage)
+
+# CALCULATE THE % COVER OVER THE MEADOWS ----
+
+# Import meadows vectors
+meadows <- st_read("/home/alessio/Synthesis/selected_meadows")
+
+# Ensure both raster and shapefile have the same CRS
+meadows <- st_transform(meadows, crs(list[[1]]))
+
+# Function to count non-NA pixels within the shapefile for a single raster
+count_non_na_within_shapefile <- function(raster_file, shapefile) {
+
+  # Mask the raster using the shapefile
+  masked_raster <- mask(raster_file, shapefile)
+  
+  # Count non-NA pixels within the shapefile
+  non_na_count <- sum(!is.na(values(masked_raster)))
+  
+  return(non_na_count)
+}
+
+
+# Apply the function to each raster in the list
+non_na_counts <- lapply(list, count_non_na_within_shapefile, shapefile = meadows)
+
+# Convert the list of counts to a vector for easier reading
+non_na_counts <- unlist(non_na_counts)
+
+# Calculate the cover %
+maxre <- 338898
+maxps <- 902627
+
+calculate_re <- function(c){
+  1 - (maxre - c) / maxre
+}
+
+calculate_ps <- function(c){
+  1 - (maxps - c) / maxps
+}
+
+cover1 <- lapply(non_na_counts, calculate_re)
+cover1 <- unlist(cover1[1:15])
+
+cover2 <- lapply(non_na_counts, calculate_ps)
+cover2 <- unlist(cover2[16:43])
+
+cover <- c(cover1, cover2)
+
+summary(cover)
