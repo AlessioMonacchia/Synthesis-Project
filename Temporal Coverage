@@ -1,0 +1,40 @@
+# libraries
+library(ggplot2)
+library(dplyr)
+
+# HEATMAP
+
+dates <- data.frame(
+  date = c("2011_05_26", "2012_05_19", "2012_07_08", 
+                   "2012_08_02", "2013_05_15", "2013_08_02",
+                   "2013_09_06", "2015_05_11", "2015_06_05",
+                   "2015_07_07", "2015_09_01", "2016_06_23",
+                   "2016_08_08", "2016_09_07", "2017_05_19",
+                   "2017_08_01", "2017_08_30", "2018_05_20",
+                   "2018_07_07", "2018_08_13", "2018_09_10",
+                   "2018_09_30", "2019_05_19", "2019_06_24",
+                   "2019_07_25", "2019_09_21", "2020_05_22",
+                   "2020_07_28", "2020_09_14", "2021_05_11",
+                   "2021_06_18", "2021_07_13", "2021_09_09",
+                   "2022_05_19", "2022_06_15", "2022_07_20",
+                   "2022_08_05", "2023_05_27", "2023_06_03",
+                   "2023_07_15", "2023_08_15", "2023_09_27",
+                   "2024_05_14")
+)
+
+dates$date <- as.Date(gsub("_", "-", dates$date))
+
+dates$year <- format(dates$date, "%Y")
+dates$month <- format(dates$date, "%m")
+
+summary_table <- dates %>%
+  group_by(year, month) %>%
+  summarise(frequency = n()) %>%
+  ungroup()
+
+ggplot(summary_table, aes(x = year, y = month)) +
+  geom_tile(aes(fill = frequency), color = "white") +
+  scale_fill_gradient(low = "green", high = "darkgreen") +
+  labs(title = "Temporal Distribution of Planet Imagery",
+       x = "Year", y = "Month", fill = "Frequency") +
+  theme_minimal()
