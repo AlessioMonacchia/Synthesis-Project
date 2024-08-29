@@ -1,0 +1,95 @@
+# Packages
+
+library(terra)
+library(raster)
+library(sf)
+library(RStoolbox)
+library(purrr)
+library(crayon)
+
+
+# Import composites
+
+composites <- list.files(path = "/home/alessio/Synthesis/composites", pattern = "20", full.names = TRUE, recursive = TRUE) %>%
+  map(~stack(.)/10000) # apply radiometric calibration
+
+
+#### NDVI RE ####
+
+# Calculate the NDVI
+
+ndvi <- map_at(composites, c(1:16), spectralIndices,  # for RapidEye imagery
+               blue = 1,
+               green = 2,
+               red = 3,
+               redEdge1 = 4,
+               nir = 5,
+               indices = "NDVI")
+
+ndvi <- ndvi[1:16]
+
+# MASK CLOUDS
+
+clouds <- list.files(path = "/home/alessio/Synthesis/UDM", pattern = "20", full.names = TRUE) %>%
+  map(~ rast(.x))
+
+# Create a mask for RapidEye images
+mask <- map(clouds[1:16], ~ .x < 2)
+
+# Apply the mask
+clouds_masked <- map2(clouds[1:16], mask, ~ mask(.x, .y, maskvalue = TRUE))
+
+
+ndvi_masked <- map2(ndvi, clouds_masked, ~ mask(.x, .y, inverse = TRUE))
+
+# Export
+setwd("/home/alessio/Synthesis/NDVI_masked")
+
+ndvi_masked <- map(ndvi_masked, raster)
+
+writeRaster(x = ndvi_masked[[16]],
+            filename = "ndvi_masked_2017_05_19.tif",
+            format = "GTiff",
+            datatype = 'FLT4S',
+            overwrite = T)
+
+
+
+
+#### NDVI PS ####
+
+ndvi <- map_at(composites, c(17:57), spectralIndices, # for PS2 imagery
+               blue = 1,
+               green = 2,
+               red = 3,
+               nir = 4,
+               indices = "NDVI")
+
+ndvi <- ndvi[17:57]
+
+# To extract only the clouds band from the PS imagery
+specific_band <- 6
+
+# Subset the list and extract the cloud band from each raster
+clouds_subset <- clouds[17:57] %>%
+  map(~ .x[[specific_band]])
+
+# Do the same for PS images
+mask <- map(clouds_subset[1:41], ~ .x < 1)
+
+clouds_masked <- map2(clouds_subset[1:41], mask, ~ mask(.x, .y, maskvalue = TRUE))
+
+ndvi_masked <- map2(ndvi, clouds_masked, ~ mask(.x, .y, inverse = TRUE))
+
+# Export
+setwd("/home/alessio/Synthesis/NDVI_masked")
+
+ndvi <- map(ndvi, raster)
+
+writeRaster(x = ndvi[[41]],
+            filename = "ndvi_masked_2024_08_23.tif",
+            format = "GTiff",
+            datatype = 'FLT4S',
+            overwrite = T)
+
+plot(ndvi[[5]])
