@@ -1,0 +1,130 @@
+# Libraries ----
+library(terra)
+library(raster)
+library(sf)
+library(RStoolbox)
+library(purrr)
+library(dplyr)
+
+#### NDVI ####
+
+# Import NDVI imagery
+list <- list.files(path = "/home/alessio/Synthesis/NDVI_masked", pattern = "ndvi", full.names = TRUE) %>%
+  map(~rast(.))
+
+# Import meadows vectors
+meadows <- st_read("/home/alessio/Synthesis/selected_meadows")
+
+# Adjust crs
+meadows <- st_transform(meadows, crs = st_crs(list[[1]]))
+
+# Values extraction
+list_ndvi <- list()
+for (i in seq_along(list)) {
+  x <- terra::extract(list[[i]], meadows, df = TRUE)
+  x$ID <- meadows$TARGET_FID[x$ID]
+  data <- data.frame(ID = x[[1]], ndvi = x[[2]])
+  list_ndvi <- c(list_ndvi, data)
+}
+
+
+# Get Dates
+folder_path <- "/home/alessio/Synthesis/NDVI_masked"
+
+# Get the names of all elements in the folder and store them as a vector
+elements_vector <- list.files(path = folder_path)
+elements_vector <- gsub("ndvi_masked_", "", elements_vector)
+dates <- gsub(".tif", "", elements_vector)
+
+
+
+# Statistics calculation
+m <- seq(1, 114, by = 2)
+
+results <- list() # To store all data frames
+for (i in m) {
+  mean_values <- aggregate(list_ndvi[[i+1]], by = list(list_ndvi[[i]]), FUN = mean)
+  median_values <- aggregate(list_ndvi[[i+1]], by = list(list_ndvi[[i]]), FUN = median)
+  stdv_values <- aggregate(list_ndvi[[i+1]], by = list(list_ndvi[[i]]), FUN = sd)
+  
+  # Create the data frame for this iteration
+  x <- data.frame(TARGET_FID = mean_values$Group.1, 
+                      MEAN_NDVI = mean_values$x, 
+                      MEDIAN_NDVI = median_values$x, 
+                      STD_NDVI = stdv_values$x, 
+                      DATE = dates[[(i+1)/2]])
+  
+  # Append the data frame to the list
+  results[[length(results) + 1]] <- x
+}
+
+df_ndvi <- bind_rows(results)
+
+# Check for NAs
+
+# find location of missing values
+print("Position of missing values ")
+which(is.na(df))
+
+# count total missing values 
+print("Count of total missing values  ")
+sum(is.na(df))
+
+# Export as CSV
+
+write.csv(df_ndvi, "NDVI_masked.csv", row.names = TRUE)
+
+
+#### KNDVI ####
+
+# Import KNDVI imagery
+list <- list.files(path = "/home/alessio/Synthesis/KNDVI", pattern = "kndvi", full.names = TRUE) %>%
+  map(~rast(.))
+
+# Adjust crs
+meadows <- st_transform(meadows, crs = st_crs(list[[1]]))
+
+# Values extraction
+list_kndvi <- list()
+for (i in seq_along(list)) {
+  x <- terra::extract(list[[i]], meadows, df = TRUE)
+  x$ID <- meadows$TARGET_FID[x$ID]
+  data <- data.frame(ID = x[[1]], kndvi = x[[2]])
+  list_kndvi <- c(list_kndvi, data)
+}
+
+# Statistics calculation
+m <- seq(1, 86, by = 2)
+
+results <- list() # To store all data frames
+for (i in m) {
+  mean_values <- aggregate(list_kndvi[[i+1]], by = list(list_kndvi[[i]]), FUN = mean)
+  median_values <- aggregate(list_kndvi[[i+1]], by = list(list_kndvi[[i]]), FUN = median)
+  stdv_values <- aggregate(list_kndvi[[i+1]], by = list(list_kndvi[[i]]), FUN = sd)
+  
+  # Create the data frame for this iteration
+  x <- data.frame(TARGET_FID = mean_values$Group.1, 
+                  MEAN_KNDVI = mean_values$x, 
+                  MEDIAN_KNDVI = median_values$x, 
+                  STD_KNDVI = stdv_values$x, 
+                  DATE = df$DATE[[1160*((i+1)/2)]])
+  
+  # Append the data frame to the list
+  results[[length(results) + 1]] <- x
+}
+
+df <- bind_rows(results)
+
+# Check for NAs
+
+# find location of missing values
+print("Position of missing values ")
+which(is.na(df))
+
+# count total missing values 
+print("Count of total missing values  ")
+sum(is.na(df))
+
+# Export as CSV
+
+write.csv(df, "KNDVI.csv", row.names = TRUE)
