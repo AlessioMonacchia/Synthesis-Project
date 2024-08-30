@@ -1,0 +1,228 @@
+# Packages
+
+library(terra)
+library(raster)
+library(sf)
+library(RStoolbox)
+library(purrr)
+library(crayon)
+library(dplyr)
+
+
+# Import composites
+
+composites <- list.files(path = "/home/alessio/Synthesis/composites", pattern = "20", full.names = TRUE, recursive = TRUE) %>%
+  map(~stack(.)/10000) # apply radiometric calibration
+
+
+#### NDVI RapidEye ####
+
+# Calculate the NDVI
+
+ndvi <- map_at(composites, c(1:16), spectralIndices,  # for RapidEye imagery
+               blue = 1,
+               green = 2,
+               red = 3,
+               redEdge1 = 4,
+               nir = 5,
+               indices = "NDVI")
+
+ndvi <- ndvi[1:16]
+
+# MASK UDM
+
+udm <- list.files(path = "/home/alessio/Synthesis/UDM", pattern = "20", full.names = TRUE) %>%
+  map(~ rast(.x))
+
+# Create a mask for RapidEye images
+mask <- map(udm[1:16], ~ .x < 2)
+
+# Apply the mask
+udm_masked <- map2(udm[1:16], mask, ~ mask(.x, .y, maskvalue = TRUE))
+
+
+ndvi_masked <- map2(ndvi, udm_masked, ~ mask(.x, .y, inverse = TRUE))
+
+# Export
+setwd("/home/alessio/Synthesis/NDVI_masked")
+
+ndvi_masked <- map(ndvi_masked, raster)
+
+writeRaster(x = ndvi_masked[[16]],
+            filename = "ndvi_masked_2017_05_19.tif",
+            format = "GTiff",
+            datatype = 'FLT4S',
+            overwrite = T)
+
+
+
+
+#### NDVI PlanetScope ####
+
+ndvi <- map_at(composites, c(17:57), spectralIndices, # for Planet Scope imagery
+               blue = 1,
+               green = 2,
+               red = 3,
+               nir = 4,
+               indices = "NDVI")
+
+ndvi <- ndvi[17:57]
+
+# To extract only the udm band from the PS imagery
+specific_band <- 6
+
+# Subset the list and extract the udm band from each raster
+udm_subset <- udm[17:57] %>%
+  map(~ .x[[specific_band]])
+
+# Do the same for PS images
+mask <- map(udm_subset[1:41], ~ .x < 1)
+
+udm_masked <- map2(udm_subset[1:41], mask, ~ mask(.x, .y, maskvalue = TRUE))
+
+ndvi_masked <- map2(ndvi, udm_masked, ~ mask(.x, .y, inverse = TRUE))
+
+# Export
+setwd("/home/alessio/Synthesis/NDVI_masked")
+
+ndvi <- map(ndvi, raster)
+
+writeRaster(x = ndvi[[41]],
+            filename = "ndvi_masked_2024_08_23.tif",
+            format = "GTiff",
+            datatype = 'FLT4S',
+            overwrite = T)
+
+
+#### NDVI STATS ####
+
+# Libraries ----
+library(terra)
+library(raster)
+library(sf)
+library(RStoolbox)
+library(purrr)
+library(dplyr)
+
+#### NDVI ####
+
+# Import NDVI imagery
+list <- list.files(path = "/home/alessio/Synthesis/NDVI_masked", pattern = "ndvi", full.names = TRUE) %>%
+  map(~rast(.))
+
+# Import meadows vectors
+meadows <- st_read("/home/alessio/Synthesis/selected_meadows")
+
+# Adjust crs
+meadows <- st_transform(meadows, crs = st_crs(list[[1]]))
+
+# Values extraction
+list_ndvi <- list()
+for (i in seq_along(list)) {
+  x <- terra::extract(list[[i]], meadows, df = TRUE)
+  x$ID <- meadows$TARGET_FID[x$ID]
+  data <- data.frame(ID = x[[1]], ndvi = x[[2]])
+  list_ndvi <- c(list_ndvi, data)
+}
+
+
+# Get Dates
+folder_path <- "/home/alessio/Synthesis/NDVI_masked"
+
+# Get the names of all elements in the folder and store them as a vector
+elements_vector <- list.files(path = folder_path)
+elements_vector <- gsub("ndvi_masked_", "", elements_vector)
+dates <- gsub(".tif", "", elements_vector)
+
+
+
+# Statistics calculation
+m <- seq(1, 114, by = 2)
+
+results <- list() # To store all data frames
+for (i in m) {
+  mean_values <- aggregate(list_ndvi[[i+1]], by = list(list_ndvi[[i]]), FUN = mean)
+  median_values <- aggregate(list_ndvi[[i+1]], by = list(list_ndvi[[i]]), FUN = median)
+  stdv_values <- aggregate(list_ndvi[[i+1]], by = list(list_ndvi[[i]]), FUN = sd)
+  
+  # Create the data frame for this iteration
+  x <- data.frame(TARGET_FID = mean_values$Group.1, 
+                      MEAN_NDVI = mean_values$x, 
+                      MEDIAN_NDVI = median_values$x, 
+                      STD_NDVI = stdv_values$x, 
+                      DATE = dates[[(i+1)/2]])
+  
+  # Append the data frame to the list
+  results[[length(results) + 1]] <- x
+}
+
+df_ndvi <- bind_rows(results)
+
+# Check for NAs
+
+# find location of missing values
+print("Position of missing values ")
+which(is.na(df))
+
+# count total missing values 
+print("Count of total missing values  ")
+sum(is.na(df))
+
+# Export as CSV
+
+write.csv(df_ndvi, "NDVI_masked.csv", row.names = TRUE)
+
+
+#### KNDVI ####
+
+# Import KNDVI imagery
+list <- list.files(path = "/home/alessio/Synthesis/KNDVI", pattern = "kndvi", full.names = TRUE) %>%
+  map(~rast(.))
+
+# Adjust crs
+meadows <- st_transform(meadows, crs = st_crs(list[[1]]))
+
+# Values extraction
+list_kndvi <- list()
+for (i in seq_along(list)) {
+  x <- terra::extract(list[[i]], meadows, df = TRUE)
+  x$ID <- meadows$TARGET_FID[x$ID]
+  data <- data.frame(ID = x[[1]], kndvi = x[[2]])
+  list_kndvi <- c(list_kndvi, data)
+}
+
+# Statistics calculation
+m <- seq(1, 86, by = 2)
+
+results <- list() # To store all data frames
+for (i in m) {
+  mean_values <- aggregate(list_kndvi[[i+1]], by = list(list_kndvi[[i]]), FUN = mean)
+  median_values <- aggregate(list_kndvi[[i+1]], by = list(list_kndvi[[i]]), FUN = median)
+  stdv_values <- aggregate(list_kndvi[[i+1]], by = list(list_kndvi[[i]]), FUN = sd)
+  
+  # Create the data frame for this iteration
+  x <- data.frame(TARGET_FID = mean_values$Group.1, 
+                  MEAN_KNDVI = mean_values$x, 
+                  MEDIAN_KNDVI = median_values$x, 
+                  STD_KNDVI = stdv_values$x, 
+                  DATE = df$DATE[[1160*((i+1)/2)]])
+  
+  # Append the data frame to the list
+  results[[length(results) + 1]] <- x
+}
+
+df <- bind_rows(results)
+
+# Check for NAs
+
+# find location of missing values
+print("Position of missing values ")
+which(is.na(df))
+
+# count total missing values 
+print("Count of total missing values  ")
+sum(is.na(df))
+
+# Export as CSV
+
+write.csv(df, "KNDVI.csv", row.names = TRUE)
